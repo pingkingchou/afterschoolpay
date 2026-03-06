@@ -1,0 +1,902 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>課後班收費試算系統 - 雙模式版(含後台與扣除機制)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#4F46E5',
+                        secondary: '#10B981',
+                        accent: '#F59E0B'
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-gray-100 min-h-screen p-4 md:p-8 font-sans">
+    <div class="max-w-7xl mx-auto">
+        <div class="text-center mb-6">
+            <h1 class="text-3xl font-bold text-gray-800"><i class="fas fa-calculator text-primary mr-2"></i>課後班/延長班 雙軌收費系統</h1>
+            <p class="text-gray-500 mt-2">支援單筆精算、全校 CSV 批次處理、線上修改與參數動態設定</p>
+        </div>
+
+        <!-- 頁籤切換 -->
+        <div class="flex border-b border-gray-300 mb-6 justify-center overflow-x-auto whitespace-nowrap">
+            <button id="tab-single" onclick="switchTab('single')" class="py-3 px-6 text-lg font-bold border-b-4 border-primary text-primary transition-colors focus:outline-none">
+                <i class="fas fa-user mr-2"></i>單筆試算
+            </button>
+            <button id="tab-batch" onclick="switchTab('batch')" class="py-3 px-6 text-lg font-bold border-b-4 border-transparent text-gray-500 hover:text-gray-700 transition-colors focus:outline-none">
+                <i class="fas fa-file-csv mr-2"></i>批次匯入/匯出
+            </button>
+            <button id="tab-settings" onclick="switchTab('settings')" class="py-3 px-6 text-lg font-bold border-b-4 border-transparent text-gray-500 hover:text-gray-700 transition-colors focus:outline-none">
+                <i class="fas fa-cog mr-2"></i>參數設定
+            </button>
+        </div>
+
+        <!-- ================= 模式一：單筆試算 ================= -->
+        <div id="view-single" class="flex flex-col md:flex-row gap-6 transition-opacity duration-300">
+            <!-- 左側：輸入表單 -->
+            <div class="w-full md:w-5/12 bg-white rounded-xl shadow-lg p-6 border-t-4 border-primary">
+                <h2 class="text-xl font-bold text-gray-700 mb-4 border-b pb-2"><i class="fas fa-user-graduate mr-2"></i>學生選課條件</h2>
+                
+                <form id="calcForm" class="space-y-6">
+                    <div class="flex gap-4">
+                        <div class="flex-1">
+                            <label class="block text-sm font-semibold text-gray-700 mb-1">年級 (自動切換天數)</label>
+                            <select id="grade" class="w-full border border-gray-300 rounded-lg p-2.5 bg-gray-50 focus:ring-2 focus:ring-primary outline-none">
+                                <option value="1">一年級</option><option value="2">二年級</option>
+                                <option value="3">三年級</option><option value="4">四年級</option>
+                                <option value="5">五年級</option><option value="6">六年級 (畢業班)</option>
+                            </select>
+                        </div>
+                        <div class="flex-1">
+                            <label class="block text-sm font-semibold text-gray-700 mb-1">減免身分</label>
+                            <select id="subsidyType" class="w-full border border-gray-300 rounded-lg p-2.5 bg-yellow-50 focus:ring-2 focus:ring-primary outline-none text-gray-800">
+                                <option value="無">無 (一般生)</option><option value="低收">低收</option>
+                                <option value="中低收">中低收</option><option value="35萬以下">35萬以下</option>
+                                <option value="突遭變故">突遭變故</option><option value="情況特殊">情況特殊</option>
+                                <option value="原住民">原住民</option><option value="身障生(有手冊)">身障生(有手冊)</option>
+                                <option value="身障生(鑑輔會)">身障生(鑑輔會)</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- 課後照顧班區塊 -->
+                    <div class="bg-blue-50 p-4 rounded-lg border border-blue-100">
+                        <label class="flex items-center mb-3 cursor-pointer">
+                            <input type="checkbox" id="enableAfter" class="w-5 h-5 text-blue-600 rounded border-gray-300 focus:ring-blue-500" checked onchange="toggleSection('afterSection')">
+                            <span class="ml-2 font-bold text-blue-800 text-lg">參加「課後照顧班」</span>
+                        </label>
+                        <div id="afterSection" class="space-y-3 pl-7">
+                            <div class="flex flex-wrap gap-2">
+                                <label class="inline-flex items-center bg-white px-2 py-1 rounded border cursor-pointer hover:bg-blue-100"><input type="checkbox" value="1" class="after-day w-4 h-4 text-blue-600"><span class="ml-1 text-sm">一</span></label>
+                                <label class="inline-flex items-center bg-white px-2 py-1 rounded border cursor-pointer hover:bg-blue-100"><input type="checkbox" value="2" class="after-day w-4 h-4 text-blue-600"><span class="ml-1 text-sm">二</span></label>
+                                <label class="inline-flex items-center bg-white px-2 py-1 rounded border cursor-pointer hover:bg-blue-100"><input type="checkbox" value="3" class="after-day w-4 h-4 text-blue-600" checked><span class="ml-1 text-sm">三</span></label>
+                                <label class="inline-flex items-center bg-white px-2 py-1 rounded border cursor-pointer hover:bg-blue-100"><input type="checkbox" value="4" class="after-day w-4 h-4 text-blue-600" checked><span class="ml-1 text-sm">四</span></label>
+                                <label class="inline-flex items-center bg-white px-2 py-1 rounded border cursor-pointer hover:bg-blue-100"><input type="checkbox" value="5" class="after-day w-4 h-4 text-blue-600" checked><span class="ml-1 text-sm">五</span></label>
+                            </div>
+                            <label class="inline-flex items-center cursor-pointer pt-1 block">
+                                <input type="checkbox" id="orderLunch" class="w-4 h-4 text-blue-600 rounded" checked>
+                                <span class="ml-2 text-sm font-semibold text-gray-700">計算午餐費</span>
+                            </label>
+                            <div class="flex items-center mt-2">
+                                <label class="text-sm font-semibold text-red-600 mr-2">未上課扣除天數：</label>
+                                <input type="number" id="missedAfter" value="0" min="0" class="w-20 border border-gray-300 rounded p-1 text-center focus:ring-2 focus:ring-blue-500 outline-none">
+                                <span class="text-xs text-gray-500 ml-2">(晚加入或請假)</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 延長班區塊 -->
+                    <div class="bg-green-50 p-4 rounded-lg border border-green-100">
+                        <label class="flex items-center mb-3 cursor-pointer">
+                            <input type="checkbox" id="enableExtend" class="w-5 h-5 text-green-600 rounded border-gray-300 focus:ring-green-500" onchange="toggleSection('extendSection')">
+                            <span class="ml-2 font-bold text-green-800 text-lg">參加「延長班」</span>
+                        </label>
+                        <div id="extendSection" class="space-y-3 pl-7 opacity-50 pointer-events-none transition-opacity">
+                            <div class="flex flex-wrap gap-2">
+                                <label class="inline-flex items-center bg-white px-2 py-1 rounded border cursor-pointer hover:bg-green-100"><input type="checkbox" value="1" class="extend-day w-4 h-4 text-green-600"><span class="ml-1 text-sm">一</span></label>
+                                <label class="inline-flex items-center bg-white px-2 py-1 rounded border cursor-pointer hover:bg-green-100"><input type="checkbox" value="2" class="extend-day w-4 h-4 text-green-600"><span class="ml-1 text-sm">二</span></label>
+                                <label class="inline-flex items-center bg-white px-2 py-1 rounded border cursor-pointer hover:bg-green-100"><input type="checkbox" value="3" class="extend-day w-4 h-4 text-green-600"><span class="ml-1 text-sm">三</span></label>
+                                <label class="inline-flex items-center bg-white px-2 py-1 rounded border cursor-pointer hover:bg-green-100"><input type="checkbox" value="4" class="extend-day w-4 h-4 text-green-600"><span class="ml-1 text-sm">四</span></label>
+                                <label class="inline-flex items-center bg-white px-2 py-1 rounded border cursor-pointer hover:bg-green-100"><input type="checkbox" value="5" class="extend-day w-4 h-4 text-green-600"><span class="ml-1 text-sm">五</span></label>
+                            </div>
+                            <div class="flex items-center mt-2">
+                                <label class="text-sm font-semibold text-red-600 mr-2">未上課扣除天數：</label>
+                                <input type="number" id="missedExtend" value="0" min="0" class="w-20 border border-gray-300 rounded p-1 text-center focus:ring-2 focus:ring-green-500 outline-none">
+                            </div>
+                        </div>
+                    </div>
+
+                    <button type="button" onclick="calculateSingleFee()" class="w-full bg-gray-800 hover:bg-gray-900 text-white font-bold py-3 px-4 rounded-lg transition duration-200 shadow-md">
+                        開始精算 <i class="fas fa-arrow-right ml-1"></i>
+                    </button>
+                </form>
+            </div>
+
+            <!-- 右側：計算結果與明細 -->
+            <div class="w-full md:w-7/12 bg-white rounded-xl shadow-lg border border-gray-100 overflow-hidden flex flex-col">
+                <div class="bg-gray-800 p-5 flex justify-between items-center">
+                    <h2 class="text-xl font-bold text-white"><i class="fas fa-receipt mr-2 text-accent"></i>單筆繳費明細報表</h2>
+                    <span id="badgeGrade" class="bg-gray-600 text-white text-xs px-2 py-1 rounded">未選擇</span>
+                </div>
+                <div class="p-6 flex-grow" id="receiptContent">
+                    <div class="h-full flex flex-col items-center justify-center text-gray-400">
+                        <i class="fas fa-file-invoice fa-3x mb-4 text-gray-200"></i>
+                        <p>輸入左方資料並點擊「開始精算」</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ================= 模式二：批次匯入/匯出 ================= -->
+        <div id="view-batch" class="hidden flex flex-col gap-6 transition-opacity duration-300">
+            <div class="bg-white rounded-xl shadow-lg p-6 border-t-4 border-secondary">
+                <div class="flex flex-col md:flex-row justify-between items-center mb-6 border-b pb-4">
+                    <div>
+                        <h2 class="text-2xl font-bold text-gray-700"><i class="fas fa-file-import text-secondary mr-2"></i>批次名單處理</h2>
+                        <p class="text-sm text-gray-500 mt-1">上傳 CSV 名單，並支援在表格中直接修改資料，系統將自動重新計算。</p>
+                    </div>
+                    <div class="mt-4 md:mt-0 space-x-2">
+                        <button onclick="downloadTemplate()" class="bg-blue-50 text-blue-600 hover:bg-blue-100 px-4 py-2 rounded-lg font-semibold transition border border-blue-200">
+                            <i class="fas fa-download mr-1"></i> 下載 CSV 範本
+                        </button>
+                        <button id="btnExport" onclick="exportCSV()" class="hidden bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-semibold transition shadow-md">
+                            <i class="fas fa-file-export mr-1"></i> 匯出結果 (Excel相容)
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 檔案上傳區 -->
+                <div class="flex items-center justify-center w-full mb-6">
+                    <label for="csvFileInput" class="flex flex-col items-center justify-center w-full h-40 border-2 border-dashed rounded-lg cursor-pointer bg-gray-50 hover:bg-gray-100 border-gray-300">
+                        <div class="flex flex-col items-center justify-center pt-5 pb-6">
+                            <i class="fas fa-cloud-upload-alt text-4xl text-gray-400 mb-3"></i>
+                            <p class="mb-2 text-sm text-gray-500"><span class="font-semibold">點擊上傳</span> 或拖曳 CSV 檔案至此</p>
+                            <p class="text-xs text-gray-500">支援最新含「未上課扣除天數」之格式</p>
+                        </div>
+                        <input id="csvFileInput" type="file" accept=".csv" class="hidden" onchange="handleFileUpload(event)" />
+                    </label>
+                </div>
+
+                <!-- 預覽資料表 -->
+                <div id="batchPreviewContainer" class="hidden">
+                    <h3 class="font-bold text-gray-700 mb-3"><i class="fas fa-table mr-2"></i>資料預覽與修改 (共 <span id="batchCount" class="text-secondary font-black">0</span> 筆)</h3>
+                    <div class="overflow-x-auto border border-gray-200 rounded-lg max-h-[500px]">
+                        <table class="w-full text-xs text-left whitespace-nowrap">
+                            <thead class="bg-gray-800 text-white sticky top-0 z-10">
+                                <tr>
+                                    <th class="px-2 py-2 text-center">操作</th>
+                                    <th class="px-2 py-2">班級</th>
+                                    <th class="px-2 py-2">座號</th>
+                                    <th class="px-2 py-2">姓名</th>
+                                    <th class="px-2 py-2">減免身分</th>
+                                    <th class="px-2 py-2 bg-blue-700">課後天數</th>
+                                    <th class="px-2 py-2 bg-blue-700 text-red-300">課缺</th>
+                                    <th class="px-2 py-2 bg-blue-700">午餐</th>
+                                    <th class="px-2 py-2 bg-green-700">延長天數</th>
+                                    <th class="px-2 py-2 bg-green-700 text-red-300">延缺</th>
+                                    <th class="px-2 py-2 text-right">課後學費</th>
+                                    <th class="px-2 py-2 text-right">課後材料</th>
+                                    <th class="px-2 py-2 text-right">課後午餐</th>
+                                    <th class="px-2 py-2 text-right">延長學費</th>
+                                    <th class="px-2 py-2 text-right">延長材料</th>
+                                    <th class="px-2 py-2 text-right bg-accent text-gray-900 font-bold">總計應繳</th>
+                                </tr>
+                            </thead>
+                            <tbody id="batchTableBody" class="divide-y divide-gray-200 bg-white">
+                                <!-- 動態生成 -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ================= 模式三：參數設定 ================= -->
+        <div id="view-settings" class="hidden flex flex-col gap-6 transition-opacity duration-300">
+            <!-- （維持原有的參數設定介面，無變動，省略重複以節省空間，請確保與上一版一致） -->
+            <div class="bg-white rounded-xl shadow-lg p-6 border-t-4 border-accent">
+                <div class="mb-6 border-b pb-4">
+                    <h2 class="text-2xl font-bold text-gray-700"><i class="fas fa-sliders-h text-accent mr-2"></i>系統參數設定</h2>
+                    <p class="text-sm text-gray-500 mt-1">調整收費標準與上課天數。六年級天數已獨立設定，系統會依班級自動帶入。</p>
+                </div>
+
+                <div class="space-y-8">
+                    <!-- 通用參數 -->
+                    <div>
+                        <h3 class="text-lg font-bold text-gray-700 mb-3 border-l-4 border-accent pl-2">通用收費標準</h3>
+                        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                            <div><label class="block text-sm font-semibold text-gray-700 mb-1">午餐費 (每日)</label><input type="number" id="set-lunch" class="w-full border border-gray-300 rounded-lg p-2 bg-gray-50 focus:ring-2 focus:ring-accent outline-none"></div>
+                            <div><label class="block text-sm font-semibold text-gray-700 mb-1">延長班學費單價</label><input type="number" id="set-extend-rate" class="w-full border border-gray-300 rounded-lg p-2 bg-gray-50 focus:ring-2 focus:ring-accent outline-none"></div>
+                            <div><label class="block text-sm font-semibold text-red-600 mb-1">延長班日單價整數</label><input type="number" id="set-extend-rate-int" class="w-full border border-red-300 rounded-lg p-2 bg-red-50 focus:ring-2 focus:ring-accent outline-none" title="用於扣除缺課費用"></div>
+                            <div><label class="block text-sm font-semibold text-gray-700 mb-1">延長班冷氣費 (學期)</label><input type="number" id="set-extend-ac" class="w-full border border-gray-300 rounded-lg p-2 bg-gray-50 focus:ring-2 focus:ring-accent outline-none"></div>
+                            <div><label class="block text-sm font-semibold text-gray-700 mb-1">延長班材料 (1~5年級)</label><input type="number" id="set-extend-mat-base" class="w-full border border-gray-300 rounded-lg p-2 bg-gray-50 focus:ring-2 focus:ring-accent outline-none"></div>
+                            <div><label class="block text-sm font-semibold text-gray-700 mb-1">延長班材料 (6年級)</label><input type="number" id="set-extend-mat-g6" class="w-full border border-gray-300 rounded-lg p-2 bg-gray-50 focus:ring-2 focus:ring-accent outline-none"></div>
+                        </div>
+                    </div>
+
+                    <!-- 上課天數 (1~5年級 vs 6年級) -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div class="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                            <h3 class="text-md font-bold text-gray-800 mb-3 border-l-4 border-blue-500 pl-2">1~5年級 上課總天數</h3>
+                            <div class="grid grid-cols-5 gap-2 text-center">
+                                <div><label class="block text-xs font-semibold mb-1">一</label><input type="number" id="set-d-1" class="w-full border rounded p-1 text-center"></div>
+                                <div><label class="block text-xs font-semibold mb-1">二</label><input type="number" id="set-d-2" class="w-full border rounded p-1 text-center"></div>
+                                <div><label class="block text-xs font-semibold mb-1">三</label><input type="number" id="set-d-3" class="w-full border rounded p-1 text-center"></div>
+                                <div><label class="block text-xs font-semibold mb-1">四</label><input type="number" id="set-d-4" class="w-full border rounded p-1 text-center"></div>
+                                <div><label class="block text-xs font-semibold mb-1">五</label><input type="number" id="set-d-5" class="w-full border rounded p-1 text-center"></div>
+                            </div>
+                        </div>
+                        <div class="bg-yellow-50 p-4 rounded-lg border border-yellow-200">
+                            <h3 class="text-md font-bold text-gray-800 mb-3 border-l-4 border-yellow-500 pl-2">6年級(畢業班) 上課總天數</h3>
+                            <div class="grid grid-cols-5 gap-2 text-center">
+                                <div><label class="block text-xs font-semibold mb-1">一</label><input type="number" id="set-d6-1" class="w-full border rounded p-1 text-center bg-white"></div>
+                                <div><label class="block text-xs font-semibold mb-1">二</label><input type="number" id="set-d6-2" class="w-full border rounded p-1 text-center bg-white"></div>
+                                <div><label class="block text-xs font-semibold mb-1">三</label><input type="number" id="set-d6-3" class="w-full border rounded p-1 text-center bg-white"></div>
+                                <div><label class="block text-xs font-semibold mb-1">四</label><input type="number" id="set-d6-4" class="w-full border rounded p-1 text-center bg-white"></div>
+                                <div><label class="block text-xs font-semibold mb-1">五</label><input type="number" id="set-d6-5" class="w-full border rounded p-1 text-center bg-white"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 各年級課後班標準 -->
+                    <div>
+                        <h3 class="text-lg font-bold text-gray-700 mb-3 border-l-4 border-accent pl-2">各年級課後班收費標準</h3>
+                        <div class="overflow-x-auto border rounded-lg">
+                            <table class="w-full text-sm text-center whitespace-nowrap">
+                                <thead class="bg-gray-100 text-gray-700">
+                                    <tr>
+                                        <th class="px-2 py-3 border-r border-b">年級</th>
+                                        <th class="px-2 py-3 border-r border-b">日單價</th>
+                                        <th class="px-2 py-3 border-r border-b text-red-600">日單價整數(扣除用)</th>
+                                        <th class="px-2 py-3 border-r border-b">材料費(學期)</th>
+                                        <th class="px-2 py-3 border-b">冷氣費(學期)</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td class="px-2 py-2 border-r border-b font-bold bg-gray-50 text-left">一年級</td>
+                                        <td class="px-2 py-2 border-r border-b"><input type="number" id="set-g1-rate" class="w-20 border rounded p-1 text-center"></td>
+                                        <td class="px-2 py-2 border-r border-b"><input type="number" id="set-g1-rate-int" class="w-24 border border-red-300 bg-red-50 rounded p-1 text-center text-red-700 font-bold"></td>
+                                        <td class="px-2 py-2 border-r border-b"><input type="number" id="set-g1-mat" class="w-20 border rounded p-1 text-center"></td>
+                                        <td class="px-2 py-2 border-b"><input type="number" id="set-g1-ac" class="w-20 border rounded p-1 text-center"></td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-2 py-2 border-r border-b font-bold bg-gray-50 text-left">二年級</td>
+                                        <td class="px-2 py-2 border-r border-b"><input type="number" id="set-g2-rate" class="w-20 border rounded p-1 text-center"></td>
+                                        <td class="px-2 py-2 border-r border-b"><input type="number" id="set-g2-rate-int" class="w-24 border border-red-300 bg-red-50 rounded p-1 text-center text-red-700 font-bold"></td>
+                                        <td class="px-2 py-2 border-r border-b"><input type="number" id="set-g2-mat" class="w-20 border rounded p-1 text-center"></td>
+                                        <td class="px-2 py-2 border-b"><input type="number" id="set-g2-ac" class="w-20 border rounded p-1 text-center"></td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-2 py-2 border-r border-b font-bold bg-gray-50 text-left">三年級</td>
+                                        <td class="px-2 py-2 border-r border-b"><input type="number" id="set-g3-rate" class="w-20 border rounded p-1 text-center"></td>
+                                        <td class="px-2 py-2 border-r border-b"><input type="number" id="set-g3-rate-int" class="w-24 border border-red-300 bg-red-50 rounded p-1 text-center text-red-700 font-bold"></td>
+                                        <td class="px-2 py-2 border-r border-b"><input type="number" id="set-g3-mat" class="w-20 border rounded p-1 text-center"></td>
+                                        <td class="px-2 py-2 border-b"><input type="number" id="set-g3-ac" class="w-20 border rounded p-1 text-center"></td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-2 py-2 border-r border-b font-bold bg-gray-50 text-left">四年級</td>
+                                        <td class="px-2 py-2 border-r border-b"><input type="number" id="set-g4-rate" class="w-20 border rounded p-1 text-center"></td>
+                                        <td class="px-2 py-2 border-r border-b"><input type="number" id="set-g4-rate-int" class="w-24 border border-red-300 bg-red-50 rounded p-1 text-center text-red-700 font-bold"></td>
+                                        <td class="px-2 py-2 border-r border-b"><input type="number" id="set-g4-mat" class="w-20 border rounded p-1 text-center"></td>
+                                        <td class="px-2 py-2 border-b"><input type="number" id="set-g4-ac" class="w-20 border rounded p-1 text-center"></td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-2 py-2 border-r border-b font-bold bg-gray-50 text-left">五年級</td>
+                                        <td class="px-2 py-2 border-r border-b"><input type="number" id="set-g5-rate" class="w-20 border rounded p-1 text-center"></td>
+                                        <td class="px-2 py-2 border-r border-b"><input type="number" id="set-g5-rate-int" class="w-24 border border-red-300 bg-red-50 rounded p-1 text-center text-red-700 font-bold"></td>
+                                        <td class="px-2 py-2 border-r border-b"><input type="number" id="set-g5-mat" class="w-20 border rounded p-1 text-center"></td>
+                                        <td class="px-2 py-2 border-b"><input type="number" id="set-g5-ac" class="w-20 border rounded p-1 text-center"></td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-2 py-2 border-r font-bold bg-yellow-50 text-left">六年級</td>
+                                        <td class="px-2 py-2 border-r"><input type="number" id="set-g6-rate" class="w-20 border rounded p-1 text-center bg-white"></td>
+                                        <td class="px-2 py-2 border-r"><input type="number" id="set-g6-rate-int" class="w-24 border border-red-300 bg-red-50 rounded p-1 text-center text-red-700 font-bold"></td>
+                                        <td class="px-2 py-2 border-r"><input type="number" id="set-g6-mat" class="w-20 border rounded p-1 text-center bg-white"></td>
+                                        <td class="px-2 py-2"><input type="number" id="set-g6-ac" class="w-20 border rounded p-1 text-center bg-white"></td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <div class="pt-4 border-t flex justify-end">
+                        <button onclick="saveSettings()" class="bg-accent hover:bg-yellow-600 text-white font-bold py-3 px-8 rounded-lg transition duration-200 shadow-md">
+                            <i class="fas fa-save mr-2"></i> 儲存參數設定
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ================= 修改資料的浮動視窗 (Modal) ================= -->
+    <div id="editModal" class="fixed inset-0 bg-black bg-opacity-60 z-50 hidden flex items-center justify-center">
+        <div class="bg-white w-full max-w-2xl rounded-xl shadow-2xl overflow-hidden mx-4 transform transition-all">
+            <div class="bg-gray-800 px-6 py-4 flex justify-between items-center">
+                <h3 class="text-white text-lg font-bold"><i class="fas fa-edit text-accent mr-2"></i>編輯學生收費資料</h3>
+                <button onclick="closeEditModal()" class="text-gray-400 hover:text-white focus:outline-none"><i class="fas fa-times text-xl"></i></button>
+            </div>
+            
+            <div class="p-6 space-y-4 max-h-[75vh] overflow-y-auto">
+                <input type="hidden" id="editIndex">
+                
+                <!-- 基本資料 -->
+                <div class="grid grid-cols-3 gap-4 border-b pb-4">
+                    <div><label class="block text-xs text-gray-500 mb-1">班級</label><input type="text" id="editClass" class="w-full border rounded p-2 bg-gray-50 text-sm"></div>
+                    <div><label class="block text-xs text-gray-500 mb-1">座號</label><input type="text" id="editSeat" class="w-full border rounded p-2 bg-gray-50 text-sm"></div>
+                    <div><label class="block text-xs text-gray-500 mb-1">姓名</label><input type="text" id="editName" class="w-full border rounded p-2 bg-gray-50 text-sm font-bold"></div>
+                </div>
+
+                <!-- 減免身分 -->
+                <div>
+                    <label class="block text-xs text-gray-500 mb-1">減免身分</label>
+                    <select id="editSubKey" class="w-full border rounded p-2 text-sm bg-yellow-50 outline-none focus:ring-2 focus:ring-primary">
+                        <option value="無">無 (一般生)</option><option value="低收">低收</option>
+                        <option value="中低收">中低收</option><option value="35萬以下">35萬以下</option>
+                        <option value="突遭變故">突遭變故</option><option value="情況特殊">情況特殊</option>
+                        <option value="原住民">原住民</option><option value="身障生(有手冊)">身障生(有手冊)</option>
+                        <option value="身障生(鑑輔會)">身障生(鑑輔會)</option>
+                    </select>
+                </div>
+
+                <div class="grid md:grid-cols-2 gap-4">
+                    <!-- 課後班修改 -->
+                    <div class="border rounded p-3 bg-blue-50/50">
+                        <h4 class="font-bold text-blue-800 mb-2 border-b border-blue-200 pb-1">課後照顧班</h4>
+                        <label class="block text-xs text-gray-600 mb-1">上課星期組合 (例如: 1245，不參加填 無)</label>
+                        <input type="text" id="editAfterDays" class="w-full border rounded p-2 text-sm mb-3 focus:ring-2 focus:ring-blue-500">
+                        
+                        <div class="flex items-center mb-3">
+                            <label class="text-sm font-bold text-red-600 mr-2">未上課扣除天數：</label>
+                            <input type="number" id="editMissedAfter" min="0" class="w-20 border rounded p-1 text-center text-sm focus:ring-2 focus:ring-blue-500">
+                        </div>
+                        
+                        <label class="flex items-center cursor-pointer">
+                            <input type="checkbox" id="editOrderLunch" class="w-4 h-4 text-blue-600 rounded">
+                            <span class="ml-2 text-sm font-semibold text-gray-700">計算午餐費</span>
+                        </label>
+                    </div>
+
+                    <!-- 延長班修改 -->
+                    <div class="border rounded p-3 bg-green-50/50">
+                        <h4 class="font-bold text-green-800 mb-2 border-b border-green-200 pb-1">延長班</h4>
+                        <label class="block text-xs text-gray-600 mb-1">上課星期組合 (例如: 12345，不參加填 無)</label>
+                        <input type="text" id="editExtendDays" class="w-full border rounded p-2 text-sm mb-3 focus:ring-2 focus:ring-green-500">
+                        
+                        <div class="flex items-center">
+                            <label class="text-sm font-bold text-red-600 mr-2">未上課扣除天數：</label>
+                            <input type="number" id="editMissedExtend" min="0" class="w-20 border rounded p-1 text-center text-sm focus:ring-2 focus:ring-green-500">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-gray-50 px-6 py-4 flex justify-end space-x-3 border-t">
+                <button onclick="closeEditModal()" class="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 font-semibold transition">取消</button>
+                <button onclick="saveEditData()" class="px-6 py-2 bg-primary text-white rounded-lg hover:bg-blue-700 font-bold shadow-md transition"><i class="fas fa-check mr-1"></i> 儲存並重新計算</button>
+            </div>
+        </div>
+    </div>
+
+
+    <script>
+        // ================= 核心設定資料庫 =================
+        let gradeData = {
+            "1": { rate: 109, rateInt: 113, mat: 340, ac: 260 }, 
+            "2": { rate: 115, rateInt: 119, mat: 340, ac: 260 },
+            "3": { rate: 110, rateInt: 110, mat: 165, ac: 135 }, 
+            "4": { rate: 129, rateInt: 129, mat: 165, ac: 135 },
+            "5": { rate: 128, rateInt: 128, mat: 90,  ac: 65 },  
+            "6": { rate: 105, rateInt: 105, mat: 75,  ac: 65 }
+        };
+        let extendRate = 117; let extendRateInt = 117; let extendAc = 150;
+        let extendMatBase = 430; let extendMatGrade6 = 370;
+        let LUNCH_FEE = 65;
+        
+        let baseDays = { "1": 17, "2": 18, "3": 18, "4": 18, "5": 15 };
+        let baseDaysG6 = { "1": 12, "2": 13, "3": 13, "4": 13, "5": 10 }; 
+        
+        const subsidyMap = {
+            "無": { tuition: 1, lunch: 1 }, "低收": { tuition: 0, lunch: 0 },
+            "中低收": { tuition: 0, lunch: 0 }, "35萬以下": { tuition: 0, lunch: 1 },
+            "突遭變故": { tuition: 0, lunch: 0 }, "情況特殊": { tuition: 0, lunch: 0 },
+            "原住民": { tuition: 0, lunch: 0 }, "身障生(有手冊)": { tuition: 0, lunch: 0 },
+            "身障生(鑑輔會)": { tuition: 0, lunch: 1 }
+        };
+
+        let globalBatchData = [];
+
+        // ================= UI 互動控制 =================
+        function switchTab(tab) {
+            document.getElementById('view-single').classList.toggle('hidden', tab !== 'single');
+            document.getElementById('view-batch').classList.toggle('hidden', tab !== 'batch');
+            document.getElementById('view-settings').classList.toggle('hidden', tab !== 'settings');
+            
+            const tabSingle = document.getElementById('tab-single');
+            const tabBatch = document.getElementById('tab-batch');
+            const tabSettings = document.getElementById('tab-settings');
+            
+            const activeClass = "py-3 px-6 text-lg font-bold border-b-4 transition-colors focus:outline-none ";
+            const inactiveClass = "py-3 px-6 text-lg font-bold border-b-4 border-transparent text-gray-500 hover:text-gray-700 transition-colors focus:outline-none";
+
+            tabSingle.className = inactiveClass;
+            tabBatch.className = inactiveClass;
+            tabSettings.className = inactiveClass;
+
+            if(tab === 'single'){
+                tabSingle.className = activeClass + "border-primary text-primary";
+            } else if (tab === 'batch') {
+                tabBatch.className = activeClass + "border-secondary text-secondary";
+            } else {
+                tabSettings.className = activeClass + "border-accent text-accent";
+                initSettingsUI();
+            }
+        }
+
+        function toggleSection(sectionId) {
+            const prefix = sectionId.replace('Section', '');
+            const checkboxId = 'enable' + prefix.charAt(0).toUpperCase() + prefix.slice(1);
+            const isChecked = document.getElementById(checkboxId).checked;
+            const section = document.getElementById(sectionId);
+            if (isChecked) {
+                section.classList.remove('opacity-50', 'pointer-events-none');
+            } else {
+                section.classList.add('opacity-50', 'pointer-events-none');
+                section.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = false);
+                document.getElementById('missed' + prefix.charAt(0).toUpperCase() + prefix.slice(1)).value = 0;
+            }
+        }
+
+        // ================= 核心計算引擎 =================
+        function computeStudentFee(gradeStr, subKey, afterStr, extendStr, orderLunchBool, missedAfter = 0, missedExtend = 0) {
+            afterStr = afterStr ? String(afterStr).trim().replace(/無/g, '') : '';
+            extendStr = extendStr ? String(extendStr).trim().replace(/無/g, '') : '';
+            subKey = subsidyMap[subKey] ? subKey : '無';
+            const subRule = subsidyMap[subKey];
+
+            // 擷取年級
+            let grade = "1";
+            let match = gradeStr.match(/[1-6１-６一二三四五六]/);
+            if (match) {
+                const mapC = {"一":"1","二":"2","三":"3","四":"4","五":"5","六":"6","１":"1","２":"2","３":"3","４":"4","５":"5","６":"6"};
+                grade = mapC[match[0]] || match[0];
+            }
+
+            // 判斷套用哪一組天數 (六年級專屬處理)
+            const currentBaseDays = (grade === "6") ? baseDaysG6 : baseDays;
+
+            const calcDays = (str) => {
+                let total = 0, arr = [];
+                for(let char of str) {
+                    if(currentBaseDays[char]) {
+                        total += currentBaseDays[char];
+                        arr.push(char);
+                    }
+                }
+                return { total, str: arr.join('') || '無' };
+            };
+
+            const afterDaysData = calcDays(afterStr);
+            const extendDaysData = calcDays(extendStr);
+
+            let out = {
+                grade, subKey, afterDays: afterDaysData, extendDays: extendDaysData, 
+                orderLunch: orderLunchBool, missedAfter, missedExtend,
+                afterTuitionOrig: 0, afterMat: 0, afterLunchOrig: 0, 
+                extendTuitionOrig: 0, extendMat: 0,
+                afterTuitionFinal: 0, afterLunchFinal: 0, extendTuitionFinal: 0, grandTotal: 0
+            };
+
+            // 課後班計算
+            if (afterDaysData.total > 0) {
+                const gData = gradeData[grade];
+                let rawTuition = (gData.rate * afterDaysData.total) + gData.ac;
+                let deduction = missedAfter * gData.rateInt;
+                out.afterTuitionOrig = Math.max(0, rawTuition - deduction); 
+                out.afterMat = gData.mat;
+                
+                let actualLunchDays = Math.max(0, afterDaysData.total - missedAfter);
+                out.afterLunchOrig = orderLunchBool ? (LUNCH_FEE * actualLunchDays) : 0;
+                
+                out.afterTuitionFinal = out.afterTuitionOrig * subRule.tuition;
+                out.afterLunchFinal = out.afterLunchOrig * subRule.lunch;
+            }
+
+            // 延長班計算
+            if (extendDaysData.total > 0) {
+                let rawTuitionExt = (extendRate * extendDaysData.total) + extendAc;
+                let deductionExt = missedExtend * extendRateInt;
+                out.extendTuitionOrig = Math.max(0, rawTuitionExt - deductionExt);
+                out.extendMat = (grade === "6") ? extendMatGrade6 : extendMatBase;
+                out.extendTuitionFinal = out.extendTuitionOrig * subRule.tuition;
+            }
+
+            out.grandTotal = out.afterTuitionFinal + out.afterMat + out.afterLunchFinal + out.extendTuitionFinal + out.extendMat;
+            return out;
+        }
+
+        // ================= 單筆模式處理邏輯 =================
+        function calculateSingleFee() {
+            const grade = document.getElementById('grade').value;
+            const subKey = document.getElementById('subsidyType').value;
+            const enableAfter = document.getElementById('enableAfter').checked;
+            const enableExtend = document.getElementById('enableExtend').checked;
+            const orderLunch = document.getElementById('orderLunch').checked;
+            const missedAfter = parseInt(document.getElementById('missedAfter').value) || 0;
+            const missedExtend = parseInt(document.getElementById('missedExtend').value) || 0;
+
+            if (!enableAfter && !enableExtend) return alert("請至少選擇參加「課後照顧班」或「延長班」！");
+
+            let afterStr = '', extendStr = '';
+            if (enableAfter) document.querySelectorAll('.after-day:checked').forEach(cb => afterStr += cb.value);
+            if (enableExtend) document.querySelectorAll('.extend-day:checked').forEach(cb => extendStr += cb.value);
+
+            const res = computeStudentFee(grade, subKey, afterStr, extendStr, orderLunch, missedAfter, missedExtend);
+            renderSingleReceipt(res);
+        }
+
+        function renderSingleReceipt(d) {
+            document.getElementById('badgeGrade').innerText = `${d.grade}年級 | ${d.subKey}`;
+            // 這裡保留您原本精美的收據 HTML 邏輯（為縮減篇幅不再重複列出，與上一版完全一致）
+            let html = `
+                <div class="overflow-x-auto mb-4 border rounded-lg">
+                    <table class="w-full text-sm text-left"><thead class="bg-gray-100 text-gray-700">
+                        <tr><th class="px-4 py-2 border-b border-r">項目</th><th class="px-4 py-2 text-center border-b border-r">天數/狀態</th>
+                        <th class="px-4 py-2 text-right border-b border-r">原始應收(含扣除)</th><th class="px-4 py-2 text-right border-b">減免後實收</th></tr>
+                    </thead><tbody>`;
+            
+            if (d.afterDays.total > 0) {
+                let deductStr = d.missedAfter > 0 ? `<br><span class="text-xs text-red-500">已扣除 ${d.missedAfter} 天</span>` : '';
+                html += `
+                    <tr class="bg-blue-50/30">
+                        <td class="px-4 py-3 border-b border-r font-medium text-blue-800">課後班學費</td>
+                        <td class="px-4 py-3 border-b border-r text-center">${d.afterDays.str}<br><span class="text-xs text-gray-500">基底 ${d.afterDays.total} 天</span>${deductStr}</td>
+                        <td class="px-4 py-3 border-b border-r text-right">$${d.afterTuitionOrig.toLocaleString()}</td>
+                        <td class="px-4 py-3 border-b text-right font-bold text-gray-800">$${d.afterTuitionFinal.toLocaleString()}</td>
+                    </tr>
+                    <tr class="bg-blue-50/30">
+                        <td class="px-4 py-2 border-b border-r font-medium text-blue-800">課後材料費</td><td class="px-4 py-2 border-b border-r text-center">-</td>
+                        <td class="px-4 py-2 border-b border-r text-right">$${d.afterMat.toLocaleString()}</td><td class="px-4 py-2 border-b text-right font-bold text-gray-800">$${d.afterMat.toLocaleString()}</td>
+                    </tr>
+                    <tr class="bg-blue-50/30">
+                        <td class="px-4 py-3 border-b border-r font-medium text-blue-800">課後班午餐</td>
+                        <td class="px-4 py-3 border-b border-r text-center">${d.orderLunch ? '有訂餐' : '未訂餐'}</td>
+                        <td class="px-4 py-3 border-b border-r text-right">$${d.afterLunchOrig.toLocaleString()}</td>
+                        <td class="px-4 py-3 border-b text-right font-bold text-gray-800">$${d.afterLunchFinal.toLocaleString()}</td>
+                    </tr>`;
+            }
+            if (d.extendDays.total > 0) {
+                let deductStrExt = d.missedExtend > 0 ? `<br><span class="text-xs text-red-500">已扣除 ${d.missedExtend} 天</span>` : '';
+                html += `
+                    <tr class="bg-green-50/30">
+                        <td class="px-4 py-3 border-b border-r font-medium text-green-800">延長班學費</td>
+                        <td class="px-4 py-3 border-b border-r text-center">${d.extendDays.str}<br><span class="text-xs text-gray-500">基底 ${d.extendDays.total} 天</span>${deductStrExt}</td>
+                        <td class="px-4 py-3 border-b border-r text-right">$${d.extendTuitionOrig.toLocaleString()}</td>
+                        <td class="px-4 py-3 border-b text-right font-bold text-gray-800">$${d.extendTuitionFinal.toLocaleString()}</td>
+                    </tr>
+                    <tr class="bg-green-50/30">
+                        <td class="px-4 py-2 border-b border-r font-medium text-green-800">延長班材料</td><td class="px-4 py-2 border-b border-r text-center">-</td>
+                        <td class="px-4 py-2 border-b border-r text-right">$${d.extendMat.toLocaleString()}</td><td class="px-4 py-2 border-b text-right font-bold text-gray-800">$${d.extendMat.toLocaleString()}</td>
+                    </tr>`;
+            }
+            html += `</tbody></table></div>
+                <div class="mt-auto pt-4 flex justify-between items-end border-t-2 border-gray-800">
+                    <div><span class="block text-gray-600 font-bold">總計應繳</span></div>
+                    <div class="text-right"><span class="text-4xl font-black text-primary">$${d.grandTotal.toLocaleString()}</span></div>
+                </div>`;
+            document.getElementById('receiptContent').innerHTML = html;
+        }
+
+        // ================= 批次模式處理與表格渲染 =================
+        function downloadTemplate() {
+            const BOM = "\uFEFF";
+            const csvContent = "班級,座號,姓名,減免身分,課後班上課天,課後未上課天數,課後班午餐,延長班上課天,延長未上課天數\n" +
+                               "101,1,王小明,無,1245,0,是,12345,0\n" +
+                               "二年三班,2,陳小華,低收,1345,5,否,無,0\n" +
+                               "605,15,林大衛(6年級),身障生(鑑輔會),無,0,否,124,3";
+            const blob = new Blob([BOM + csvContent], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement("a");
+            link.href = URL.createObjectURL(blob);
+            link.download = "課後班收費_名單匯入範本.csv";
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        function handleFileUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                processCSV(e.target.result);
+                document.getElementById('csvFileInput').value = ''; 
+            };
+            reader.readAsText(file); 
+        }
+
+        function processCSV(csvText) {
+            const rows = csvText.split(/\r?\n/).filter(r => r.trim() !== '');
+            if (rows.length <= 1) return alert("檔案格式錯誤或為空！");
+
+            const headers = rows[0].split(',').map(h => h.trim());
+            const idxClass = headers.findIndex(h => h.includes('班級'));
+            const idxSeat = headers.findIndex(h => h.includes('座號'));
+            const idxName = headers.findIndex(h => h.includes('姓名'));
+            const idxSub = headers.findIndex(h => h.includes('身分'));
+            
+            const idxAfter = headers.findIndex(h => h.includes('課後') && h.includes('上課天'));
+            const idxMissedAfter = headers.findIndex(h => h.includes('課後') && h.includes('未上課'));
+            const idxLunch = headers.findIndex(h => h.includes('午餐'));
+            
+            const idxExtend = headers.findIndex(h => h.includes('延長') && h.includes('上課天'));
+            const idxMissedExtend = headers.findIndex(h => h.includes('延長') && h.includes('未上課'));
+
+            if (idxClass===-1 || idxName===-1 || idxAfter===-1 || idxExtend===-1) {
+                return alert("CSV缺少必要欄位！請重新下載範本。");
+            }
+
+            globalBatchData = [];
+
+            for (let i = 1; i < rows.length; i++) {
+                const cols = rows[i].split(',').map(c => c.trim());
+                if (cols.length < 3) continue;
+
+                let record = {
+                    class: cols[idxClass] || '',
+                    seat: idxSeat !== -1 ? cols[idxSeat] : '',
+                    name: cols[idxName] || '',
+                    subKey: idxSub !== -1 ? cols[idxSub] : '無',
+                    rawAfter: cols[idxAfter] || '無',
+                    missedAfter: idxMissedAfter !== -1 ? (parseInt(cols[idxMissedAfter]) || 0) : 0,
+                    rawLunch: idxLunch !== -1 ? cols[idxLunch] : '否',
+                    rawExtend: cols[idxExtend] || '無',
+                    missedExtend: idxMissedExtend !== -1 ? (parseInt(cols[idxMissedExtend]) || 0) : 0
+                };
+                
+                recalculateRecordAndPush(record, false);
+            }
+            renderBatchTable();
+            
+            document.getElementById('batchPreviewContainer').classList.remove('hidden');
+            document.getElementById('btnExport').classList.remove('hidden');
+        }
+
+        // 重新計算單筆 record 並推入/更新至 globalBatchData
+        function recalculateRecordAndPush(record, isUpdate = false, updateIndex = -1) {
+            const orderLunch = (record.rawLunch === '是' || record.rawLunch === 'Y' || record.rawLunch === '1' || record.rawLunch === true);
+            
+            const res = computeStudentFee(
+                record.class, record.subKey, 
+                record.rawAfter, record.rawExtend, 
+                orderLunch, record.missedAfter, record.missedExtend
+            );
+
+            const finalRecord = {
+                class: record.class, seat: record.seat, name: record.name, 
+                subKey: res.subKey, 
+                rawAfter: res.afterDays.str, missedAfter: res.missedAfter, 
+                rawLunch: res.orderLunch ? '是' : '否', 
+                rawExtend: res.extendDays.str, missedExtend: res.missedExtend,
+                afterTuition: res.afterTuitionFinal, afterMat: res.afterMat, afterLunch: res.afterLunchFinal,
+                extendTuition: res.extendTuitionFinal, extendMat: res.extendMat,
+                total: res.grandTotal
+            };
+
+            if (isUpdate && updateIndex >= 0) {
+                globalBatchData[updateIndex] = finalRecord;
+            } else {
+                globalBatchData.push(finalRecord);
+            }
+        }
+
+        // 獨立出的表格渲染函數
+        function renderBatchTable() {
+            let tableHtml = '';
+            globalBatchData.forEach((record, index) => {
+                tableHtml += `
+                    <tr class="hover:bg-gray-50 border-b border-gray-100 group transition-colors">
+                        <td class="px-2 py-2 text-center whitespace-nowrap">
+                            <button onclick="openEditModal(${index})" class="bg-blue-100 text-blue-700 hover:bg-blue-600 hover:text-white px-2 py-1 rounded text-xs font-bold transition mr-1" title="修改"><i class="fas fa-pen"></i> 編輯</button>
+                            <button onclick="deleteRow(${index})" class="bg-red-100 text-red-700 hover:bg-red-600 hover:text-white px-2 py-1 rounded text-xs font-bold transition" title="刪除"><i class="fas fa-trash"></i></button>
+                        </td>
+                        <td class="px-2 py-2">${record.class}</td>
+                        <td class="px-2 py-2">${record.seat}</td>
+                        <td class="px-2 py-2 font-bold">${record.name}</td>
+                        <td class="px-2 py-2 text-[10px]"><span class="bg-yellow-100 text-yellow-800 px-1 py-0.5 rounded">${record.subKey}</span></td>
+                        <td class="px-2 py-2 text-blue-600">${record.rawAfter}</td>
+                        <td class="px-2 py-2 text-red-500 font-bold">${record.missedAfter > 0 ? '-'+record.missedAfter : ''}</td>
+                        <td class="px-2 py-2 text-blue-600">${record.rawLunch}</td>
+                        <td class="px-2 py-2 text-green-600">${record.rawExtend}</td>
+                        <td class="px-2 py-2 text-red-500 font-bold">${record.missedExtend > 0 ? '-'+record.missedExtend : ''}</td>
+                        <td class="px-2 py-2 text-right">$${record.afterTuition.toLocaleString()}</td>
+                        <td class="px-2 py-2 text-right text-gray-500">$${record.afterMat.toLocaleString()}</td>
+                        <td class="px-2 py-2 text-right text-gray-500">$${record.afterLunch.toLocaleString()}</td>
+                        <td class="px-2 py-2 text-right">$${record.extendTuition.toLocaleString()}</td>
+                        <td class="px-2 py-2 text-right text-gray-500">$${record.extendMat.toLocaleString()}</td>
+                        <td class="px-2 py-2 text-right font-black text-primary">$${record.total.toLocaleString()}</td>
+                    </tr>
+                `;
+            });
+
+            document.getElementById('batchTableBody').innerHTML = tableHtml;
+            document.getElementById('batchCount').innerText = globalBatchData.length;
+            
+            if(globalBatchData.length === 0) {
+                document.getElementById('batchPreviewContainer').classList.add('hidden');
+                document.getElementById('btnExport').classList.add('hidden');
+            }
+        }
+
+        // ================= 線上修改 (Modal) 邏輯 =================
+        function openEditModal(index) {
+            const r = globalBatchData[index];
+            document.getElementById('editIndex').value = index;
+            document.getElementById('editClass').value = r.class;
+            document.getElementById('editSeat').value = r.seat;
+            document.getElementById('editName').value = r.name;
+            
+            // 設定身分選單
+            const subSelect = document.getElementById('editSubKey');
+            let found = false;
+            for(let i=0; i<subSelect.options.length; i++) {
+                if(subSelect.options[i].value === r.subKey) {
+                    subSelect.selectedIndex = i; found = true; break;
+                }
+            }
+            if(!found) subSelect.selectedIndex = 0; // 預設無
+
+            // 設定天數與扣除
+            document.getElementById('editAfterDays').value = r.rawAfter;
+            document.getElementById('editMissedAfter').value = r.missedAfter;
+            document.getElementById('editOrderLunch').checked = (r.rawLunch === '是');
+            
+            document.getElementById('editExtendDays').value = r.rawExtend;
+            document.getElementById('editMissedExtend').value = r.missedExtend;
+
+            document.getElementById('editModal').classList.remove('hidden');
+        }
+
+        function closeEditModal() {
+            document.getElementById('editModal').classList.add('hidden');
+        }
+
+        function saveEditData() {
+            const index = parseInt(document.getElementById('editIndex').value);
+            
+            let updatedRecord = {
+                class: document.getElementById('editClass').value.trim(),
+                seat: document.getElementById('editSeat').value.trim(),
+                name: document.getElementById('editName').value.trim(),
+                subKey: document.getElementById('editSubKey').value,
+                rawAfter: document.getElementById('editAfterDays').value.trim(),
+                missedAfter: parseInt(document.getElementById('editMissedAfter').value) || 0,
+                rawLunch: document.getElementById('editOrderLunch').checked ? '是' : '否',
+                rawExtend: document.getElementById('editExtendDays').value.trim(),
+                missedExtend: parseInt(document.getElementById('editMissedExtend').value) || 0
+            };
+
+            recalculateRecordAndPush(updatedRecord, true, index);
+            renderBatchTable();
+            closeEditModal();
+            showToast("✏️ 該筆資料已更新並重新計算完成！");
+        }
+
+        function deleteRow(index) {
+            if(confirm(`確定要刪除「${globalBatchData[index].name}」這筆資料嗎？`)) {
+                globalBatchData.splice(index, 1);
+                renderBatchTable();
+                showToast("🗑️ 已刪除該筆資料。");
+            }
+        }
+
+        // ================= 匯出邏輯 =================
+        function exportCSV() {
+            if (globalBatchData.length === 0) return alert("沒有可匯出的資料！");
+            
+            const BOM = "\uFEFF";
+            let csvContent = BOM + "班級,座號,姓名,減免身分,課後天數組合,課後扣除天數,課後訂餐,延長天數組合,延長扣除天數,課後學費(含冷氣),課後材料費,課後午餐費,延長學費(含冷氣),延長材料費,總計應繳\n";
+
+            globalBatchData.forEach(r => {
+                const row = [
+                    r.class, r.seat, r.name, r.subKey, 
+                    r.rawAfter, r.missedAfter, r.rawLunch, 
+                    r.rawExtend, r.missedExtend,
+                    r.afterTuition, r.afterMat, r.afterLunch, 
+                    r.extendTuition, r.extendMat, r.total
+                ];
+                const safeRow = row.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',');
+                csvContent += safeRow + "\n";
+            });
+
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement("a");
+            link.href = URL.createObjectURL(blob);
+            const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+            link.download = `課後班結算表(含缺課扣除)_${dateStr}.csv`;
+            
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        // ================= 參數設定邏輯 =================
+        function initSettingsUI() {
+            document.getElementById('set-lunch').value = LUNCH_FEE;
+            document.getElementById('set-extend-rate').value = extendRate;
+            document.getElementById('set-extend-rate-int').value = extendRateInt;
+            document.getElementById('set-extend-ac').value = extendAc;
+            document.getElementById('set-extend-mat-base').value = extendMatBase;
+            document.getElementById('set-extend-mat-g6').value = extendMatGrade6;
+            
+            for(let i=1; i<=5; i++) {
+                document.getElementById(`set-d-${i}`).value = baseDays[i.toString()];
+                document.getElementById(`set-d6-${i}`).value = baseDaysG6[i.toString()];
+            }
+
+            for(let i=1; i<=6; i++) {
+                let g = i.toString();
+                document.getElementById(`set-g${g}-rate`).value = gradeData[g].rate;
+                document.getElementById(`set-g${g}-rate-int`).value = gradeData[g].rateInt;
+                document.getElementById(`set-g${g}-mat`).value = gradeData[g].mat;
+                document.getElementById(`set-g${g}-ac`).value = gradeData[g].ac;
+            }
+        }
+
+        function saveSettings() {
+            LUNCH_FEE = parseFloat(document.getElementById('set-lunch').value) || 0;
+            extendRate = parseFloat(document.getElementById('set-extend-rate').value) || 0;
+            extendRateInt = parseInt(document.getElementById('set-extend-rate-int').value) || 0;
+            extendAc = parseFloat(document.getElementById('set-extend-ac').value) || 0;
+            extendMatBase = parseFloat(document.getElementById('set-extend-mat-base').value) || 0;
+            extendMatGrade6 = parseFloat(document.getElementById('set-extend-mat-g6').value) || 0;
+            
+            for(let i=1; i<=5; i++) {
+                baseDays[i.toString()] = parseInt(document.getElementById(`set-d-${i}`).value) || 0;
+                baseDaysG6[i.toString()] = parseInt(document.getElementById(`set-d6-${i}`).value) || 0;
+            }
+
+            for(let i=1; i<=6; i++) {
+                let g = i.toString();
+                gradeData[g].rate = parseFloat(document.getElementById(`set-g${g}-rate`).value) || 0;
+                gradeData[g].rateInt = parseInt(document.getElementById(`set-g${g}-rate-int`).value) || 0;
+                gradeData[g].mat = parseFloat(document.getElementById(`set-g${g}-mat`).value) || 0;
+                gradeData[g].ac = parseFloat(document.getElementById(`set-g${g}-ac`).value) || 0;
+            }
+
+            // 若目前有批次資料，儲存參數後自動重算所有名單！
+            if (globalBatchData.length > 0) {
+                let currentData = [...globalBatchData];
+                globalBatchData = [];
+                currentData.forEach(r => recalculateRecordAndPush(r, false));
+                renderBatchTable();
+                showToast("✅ 參數已儲存，且已自動套用至目前的批次名單！");
+            } else {
+                showToast("✅ 參數已成功儲存！");
+            }
+        }
+
+        function showToast(msg) {
+            const toast = document.createElement('div');
+            toast.className = "fixed bottom-5 right-5 bg-gray-800 text-white font-bold px-6 py-4 rounded-xl shadow-2xl transition-all duration-300 z-50 flex items-center border-l-4 border-green-500 transform translate-y-0 opacity-100";
+            toast.innerHTML = msg;
+            document.body.appendChild(toast);
+            
+            setTimeout(() => {
+                toast.classList.add('opacity-0', 'translate-y-5');
+                setTimeout(() => document.body.removeChild(toast), 300);
+            }, 3000);
+        }
+
+    </script>
+</body>
+</html>
